@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+    --primary-color: #005a31;
+    --brand-orange: #ff6b00;
+    --background-light: #f4f4f4;
+    --footer-dark: #005a31;
+    --shadow-soft: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 8px 15px -8px rgba(0, 0, 0, 0.05);
+}
+
+@layer base {
+    body { 
+        font-family: 'Montserrat', 'Inter', system-ui, -apple-system, sans-serif; 
+        @apply bg-[#f4f4f4] text-gray-800 antialiased selection:bg-emerald-100; 
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+@layer utilities {
+    .shadow-soft {
+        box-shadow: var(--shadow-soft);
+    }
+    .transition-soft {
+        @apply transition-all duration-300 ease-in-out;
+    }
+}
+
+.flash-deal-bg { background-color: var(--brand-orange); }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.text-hasaki { color: var(--primary-color); }
+.bg-hasaki { background-color: var(--primary-color); }
+.progress-bar {
+    background: linear-gradient(90deg, #ff6b00 0%, #ff9d00 100%);
+}
