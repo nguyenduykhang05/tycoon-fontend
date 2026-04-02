@@ -155,7 +155,7 @@ export default function ProductDetailPage({ product, onAddToCart, onBuyNow, onBa
   return (
     <div className="bg-[#f4f4f4] min-h-screen pb-10">
       {/* Sticky Product Header (Hasaki style) */}
-      <div className={`bg-white border-b shadow-md sticky top-[52px] z-40 transition-all duration-300 transform ${showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
+      <div className={`bg-white border-b shadow-md sticky top-[120px] z-40 transition-all duration-300 transform ${showStickyHeader ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4 overflow-hidden">
                   <img src={product.image_url} alt={product.name} className="w-10 h-10 object-contain flex-shrink-0" />
@@ -433,7 +433,7 @@ export default function ProductDetailPage({ product, onAddToCart, onBuyNow, onBa
             {/* Nội dung chi tiết - 9 cột */}
              <div className="col-span-9 bg-white rounded-[2rem] shadow-soft border border-gray-100 overflow-hidden">
                 {/* Sticky Header Nav */}
-                <div className="flex border-b border-gray-200 sticky top-[52px] bg-white z-30">
+                <div className="flex border-b border-gray-200 sticky top-[120px] bg-white z-30">
                     {[
                         { id: 'desc', label: 'Mô tả' },
                         { id: 'specs', label: 'Thông số' },

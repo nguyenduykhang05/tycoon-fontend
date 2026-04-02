@@ -884,7 +884,7 @@ export default function App() {
                 </div>
             </div>
         </div>
-        <div className="bg-white border-b shadow-sm sticky top-[52px] z-40">
+        <div className="bg-white border-b shadow-sm sticky top-[80px] z-40">
           <div className="container mx-auto px-4 flex items-center justify-between text-[13px] font-bold py-2.5 uppercase tracking-tight text-[#005a31]">
             <div className="flex items-center gap-6 relative">
               <div
