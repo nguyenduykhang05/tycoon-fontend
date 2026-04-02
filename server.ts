@@ -430,6 +430,43 @@ app.post('/api/ai/chat', async (req, res) => {
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+// Admin: Tất cả đơn hàng
+app.get('/api/admin/orders', authenticateToken, isAdmin, (_req, res) => {
+    try {
+        const orders = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all() as any[];
+        const result = orders.map((o: any) => {
+            const items = db.prepare(`
+                SELECT oi.*, p.name FROM order_items oi
+                JOIN products p ON oi.product_id = p.id WHERE oi.order_id=?
+            `).all(o.id) as any[];
+            return { ...o, product_names: items.map((i: any) => i.name).join(', ') };
+        });
+        res.json({ success: true, data: result });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// Admin: Tất cả lịch đặt spa
+app.get('/api/admin/spa-bookings', authenticateToken, isAdmin, (_req, res) => {
+    try {
+        const bookings = db.prepare(`
+            SELECT sb.*, ss.name as service_name, st.name as branch_name
+            FROM spa_bookings sb
+            LEFT JOIN spa_services ss ON sb.service_id = ss.id
+            LEFT JOIN stores st ON sb.branch_id = st.id
+            ORDER BY sb.created_at DESC
+        `).all();
+        res.json({ success: true, data: bookings });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// Admin: Danh sách người dùng
+app.get('/api/admin/users', authenticateToken, isAdmin, (_req, res) => {
+    try {
+        const users = db.prepare('SELECT id, username, full_name, role, tier, points, created_at FROM users ORDER BY created_at DESC').all();
+        res.json({ success: true, data: users });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 // Flash deal settings (admin)
 app.get('/api/admin/settings/flash-deal', (_req, res) => {
     res.json({ success: true, data: { end_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } });

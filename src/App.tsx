@@ -778,7 +778,7 @@ export default function App() {
                           </div>
                           {(user.role === 'admin' || user.role === 'staff') && (
                             <button
-                              onClick={() => { setCurrentPage('admin' as any); setIsAccountMenuOpen(false); }}
+                              onClick={() => { window.location.href = '/admin'; }}
                               className="bg-[#ff6b00] text-white text-[10px] px-2 py-1 rounded font-bold hover:bg-orange-600 transition-colors uppercase"
                             >
                               Quản trị

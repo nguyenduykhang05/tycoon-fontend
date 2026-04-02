@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "start": "concurrently \"npm run server\" \"npm run dev\"",
     "server": "tsx server.ts",
     "seed": "tsx seed.ts",
     "dev:all": "concurrently \"npm run server\" \"npm run dev\""
