@@ -17,6 +17,7 @@ import StorePage from './components/StorePage';
 import WarrantyPage from './components/WarrantyPage';
 import SpaPage from './components/SpaPage';
 import ChatWidget from './components/ChatWidget';
+import AIChatWidget from './components/AIChatWidget';
 import ProductDetailPage from './components/ProductDetailPage';
 import AccountPage from './components/AccountPage';
 import AdminDashboard from './components/AdminDashboard';
@@ -1444,6 +1445,7 @@ export default function App() {
         )}
 
         <ChatWidget isOpenExternally={showChat} onCloseExternal={() => setShowChat(false)} />
+        <AIChatWidget />
         
         <footer className="bg-[#005a31] text-white pt-16 pb-10 mt-16">
           <div className="container mx-auto px-4">
@@ -1525,8 +1527,6 @@ export default function App() {
           </div>
         )}
 
-        {/* AI Chat Widget */}
-        <ChatWidget />
 
         {/* Auth Modal */}
         {modalMode && (

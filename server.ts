@@ -1,7 +1,7 @@
 // @ts-nocheck
 import express, { Request, Response } from 'express';
 import db, { setupDatabase } from './database.js';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -20,7 +20,7 @@ app.use((req, res, next) => {
     next();
 });
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || 'dummy_key' });
+const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'dummy_key');
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tycoon_super_secret_key_2026';
@@ -425,6 +425,7 @@ app.delete('/api/admin/products/:id', authenticateToken, isStaffOrAdmin, (req, r
 // AI Chat - Tycoon Smart Assistant
 app.post('/api/ai/chat', async (req, res) => {
     const { message, history } = req.body;
+    console.log(`[AI Request] User: ${message.substring(0, 50)}... | History: ${history?.length || 0} msgs`);
     if (!message) return res.status(400).json({ success: false, message: 'Message is required' });
     try {
         if (!process.env.GEMINI_API_KEY) {
@@ -462,56 +463,71 @@ app.post('/api/ai/chat', async (req, res) => {
             `- ${s.name}: ${s.address}, ${s.province} (${s.type})`
         ).join('\n');
 
-        const systemPrompt = `Bạn là "Tycoon AI Assistant" - trợ lý thông minh chuyên về mỹ phẩm và làm đẹp của hệ thống Tycoon Beauty & Clinic.
+        const systemPrompt = `Bạn là "Chuyên viên Tư vấn Sắc đẹp Tycoon" - một trợ lý AI thông minh, tận tâm và am hiểu sâu sắc về mỹ phẩm từ hệ thống Tycoon Beauty & Clinic.
 
-## VỀ TYCOON
-- Tycoon là hệ thống mỹ phẩm & spa cao cấp tại Việt Nam với 100+ chi nhánh
-- Chuyên về: Chăm sóc da mặt, Trang điểm, Chăm sóc tóc, Nước hoa, Spa & Clinic
-- Website: tycoon.vn | Giao hàng miễn phí 2H cho đơn từ 90K
+## PHONG CÁCH PHỤC VỤ
+- Luôn thân thiện, chuyên nghiệp, sử dụng ngôn ngữ trẻ trung nhưng lịch sự.
+- Ưu tiên sự an toàn và hiệu quả cho làn da của khách hàng.
+- Trả lời súc tích, đi thẳng vào vấn đề, sử dụng emoji phù hợp để tạo sự gần gũi.
 
-## SẢN PHẨM HIỆN CÓ (${products.length} sản phẩm)
+## THÔNG TIN VỀ TYCOON
+- Website chính thức: tycoon.vn
+- Quy mô: 100+ chi nhánh trên toàn quốc.
+- Cam kết: Hàng chính hãng 100%, Giao hàng nhanh 2H tại nội thành (HN, HCM, Đà Nẵng) cho đơn từ 90K.
+- Dịch vụ: Phân phối mỹ phẩm cao cấp và dịch vụ Spa & Clinic chuyên sâu.
+
+## DỮ LIỆU SẢN PHẨM & DỊCH VỤ HIỆN TẠI
+### Sản Phẩm Nổi Bật:
 ${productList}
 
-## FLASH DEAL ĐANG DIỄN RA
-${flashDeals.map((p: any) => `- ${p.name}: ${p.price.toLocaleString('vi-VN')}₫ (Giảm ${p.discount_percent}%)`).join('\n') || 'Không có flash deal hiện tại'}
+### Dịch Vụ Spa & Clinic:
+${spaList}
 
-## TOP BÁN CHẠY
-${topSelling.map((p: any) => `- ${p.name}: ${p.sold_count} đã bán`).join('\n')}
+### Hệ Thống Chi Nhánh:
+${storeList}
 
-## DỊCH VỤ SPA & CLINIC
-${spaList || 'Đang cập nhật dịch vụ'}
+## QUY TẮC PHẢN HỒI
+1. KHÔNG tự bịa đặt thông tin sản phẩm không có trong danh sách.
+2. Nếu khách hỏi sản phẩm không có → Gợi ý sản phẩm tương tự đang có sẵn tại Tycoon.
+3. Luôn đính kèm giá tiền chính xác (VND) khi nhắc đến sản phẩm.
+4. Khi tư vấn Spa → Nhấn mạnh vào hiệu quả và thời gian thực hiện, hướng dẫn khách đặt lịch online.
+5. Nếu khách hỏi về đơn hàng → Hướng dẫn khách vào mục "Tài khoản > Quản lý đơn hàng" trên app/web.
+6. Giới hạn câu trả lời trong khoảng 150-200 từ.`;
 
-## CHI NHÁNH
-${storeList || 'Đang cập nhật chi nhánh'}
+        const fullMessage = `Dưới đây là thông tin hệ thống và yêu cầu từ người dùng. Hãy trả lời dựa trên vai trò đã được thiết lập.
+        
+Context Hệ Thống: ${systemPrompt}
+Tin nhắn người dùng: ${message}`;
 
-## HƯỚNG DẪN TRẢ LỜI
-1. Luôn trả lời bằng tiếng Việt, thân thiện, chuyên nghiệp
-2. Khi khách hỏi sản phẩm → gợi ý cụ thể với tên, giá, thương hiệu từ danh sách trên
-3. Khi khách hỏi giá → cung cấp giá chính xác từ dữ liệu
-4. Khi khách hỏi spa → tư vấn dịch vụ phù hợp và hướng dẫn đặt lịch
-5. Khi khách hỏi chi nhánh → cung cấp địa chỉ gần nhất
-6. Khi hỏi về đơn hàng → hướng dẫn vào mục "Tài khoản > Quản lý đơn hàng"
-7. Giới hạn câu trả lời dưới 200 từ, súc tích và hữu ích
-8. Với câu hỏi không liên quan đến mỹ phẩm/làm đẹp → nhẹ nhàng hướng về chủ đề Tycoon`;
-
-        // Build conversation history for multi-turn chat
         const conversationHistory = (history || []).map((msg: any) => ({
             role: msg.role === 'bot' ? 'model' : 'user',
             parts: [{ text: msg.text }]
         }));
 
-        const contents = [
-            { role: 'user', parts: [{ text: systemPrompt + '\n\n---\nKhách hàng hỏi: ' + message }] }
-        ];
+        let result;
+        try {
+            // Sử dụng gemini-2.5-flash (Model đời mới nhất theo xác nhận từ Dashboard của bạn)
+            const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            result = await model.generateContent({
+                contents: conversationHistory.length > 0
+                    ? [...conversationHistory, { role: 'user', parts: [{ text: fullMessage }] }]
+                    : [{ role: 'user', parts: [{ text: fullMessage }] }],
+            });
+        } catch (error: any) {
+            console.error('Gemini 2.5-Flash Primary Error:', error?.message || error);
+            // Fallback sang gemini-2.0-flash (Mô hình dự phòng cực kỳ mạnh mẽ)
+            const fallbackModel = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            result = await fallbackModel.generateContent({
+                contents: conversationHistory.length > 0
+                    ? [...conversationHistory, { role: 'user', parts: [{ text: fullMessage }] }]
+                    : [{ role: 'user', parts: [{ text: fullMessage }] }],
+            });
+        }
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
-            contents: conversationHistory.length > 0
-                ? [...conversationHistory, { role: 'user', parts: [{ text: message }] }]
-                : contents,
-        });
+        const response = await result.response;
+        const aiText = response.text();
 
-        res.json({ success: true, data: { response: response.text } });
+        res.json({ success: true, data: { response: aiText } });
     } catch (e: any) {
         console.error('AI Chat Error:', e.message);
         res.status(500).json({ success: false, message: e.message });
@@ -617,6 +633,7 @@ app.get('/api/admin/settings/flash-deal', (_req, res) => {
     res.json({ success: true, data: { end_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } });
 });
 
-app.listen(PORT, () => {
-    console.log(`Backend API Server is running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend API Server is running on http://0.0.0.0:${PORT}`);
+    console.log(`Có thể truy cập qua IP mạng bộ (VD: http://192.168.x.x:${PORT})`);
 });
