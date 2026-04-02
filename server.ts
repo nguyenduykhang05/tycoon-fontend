@@ -43,6 +43,14 @@ const isAdmin = (req: Request, res: Response, next: any) => {
     next();
 };
 
+const isStaffOrAdmin = (req: Request, res: Response, next: any) => {
+    const role = (req as any).user?.role;
+    if (role !== 'admin' && role !== 'staff') {
+        return res.status(403).json({ success: false, message: 'Access denied: Staff or Admin required' });
+    }
+    next();
+};
+
 // Helper: get products with brand info and ratings
 const getProducts = (where = '', params: any[] = []) => {
     const sql = `
@@ -381,7 +389,7 @@ app.get('/api/hot-searches', (_req, res) => {
 });
 
 // Admin APIs
-app.get('/api/admin/products', authenticateToken, isAdmin, (_req, res) => {
+app.get('/api/admin/products', authenticateToken, isStaffOrAdmin, (_req, res) => {
     try {
         const products = db.prepare(`
             SELECT p.*, b.name as brand_name FROM products p
@@ -391,7 +399,7 @@ app.get('/api/admin/products', authenticateToken, isAdmin, (_req, res) => {
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.post('/api/admin/products', authenticateToken, isAdmin, (req, res) => {
+app.post('/api/admin/products', authenticateToken, isStaffOrAdmin, (req, res) => {
     const { name, price, original_price, discount_percent, image_url, category_name, is_flash_deal, sold_count, brand_id, capacities } = req.body;
     try {
         const result = db.prepare('INSERT INTO products (name, price, original_price, discount_percent, image_url, category_name, is_flash_deal, sold_count, brand_id, capacities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(name, price, original_price, discount_percent, image_url, category_name, is_flash_deal ? 1 : 0, sold_count || 0, brand_id, capacities);
@@ -399,7 +407,7 @@ app.post('/api/admin/products', authenticateToken, isAdmin, (req, res) => {
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.put('/api/admin/products/:id', authenticateToken, isAdmin, (req, res) => {
+app.put('/api/admin/products/:id', authenticateToken, isStaffOrAdmin, (req, res) => {
     const { name, price, original_price, discount_percent, image_url, category_name, is_flash_deal, sold_count, brand_id, capacities } = req.body;
     try {
         db.prepare('UPDATE products SET name=?, price=?, original_price=?, discount_percent=?, image_url=?, category_name=?, is_flash_deal=?, sold_count=?, brand_id=?, capacities=? WHERE id=?').run(name, price, original_price, discount_percent, image_url, category_name, is_flash_deal ? 1 : 0, sold_count, brand_id, capacities, req.params.id);
@@ -407,7 +415,7 @@ app.put('/api/admin/products/:id', authenticateToken, isAdmin, (req, res) => {
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-app.delete('/api/admin/products/:id', authenticateToken, isAdmin, (req, res) => {
+app.delete('/api/admin/products/:id', authenticateToken, isStaffOrAdmin, (req, res) => {
     try {
         db.prepare('DELETE FROM products WHERE id=?').run(req.params.id);
         res.json({ success: true });
@@ -511,7 +519,7 @@ ${storeList || 'Đang cập nhật chi nhánh'}
 });
 
 // Admin: Tất cả đơn hàng
-app.get('/api/admin/orders', authenticateToken, isAdmin, (_req, res) => {
+app.get('/api/admin/orders', authenticateToken, isStaffOrAdmin, (_req, res) => {
     try {
         const orders = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all() as any[];
         const result = orders.map((o: any) => {
@@ -522,6 +530,63 @@ app.get('/api/admin/orders', authenticateToken, isAdmin, (_req, res) => {
             return { ...o, product_names: items.map((i: any) => i.name).join(', ') };
         });
         res.json({ success: true, data: result });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.put('/api/admin/orders/:id/status', authenticateToken, isStaffOrAdmin, (req, res) => {
+    const { order_status } = req.body;
+    try {
+        db.prepare('UPDATE orders SET order_status=? WHERE id=?').run(order_status, req.params.id);
+        res.json({ success: true, message: 'Order status updated' });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// Chat / Tư Vấn Trực Tiếp
+app.get('/api/chat/sessions', authenticateToken, isStaffOrAdmin, (_req, res) => {
+    try {
+        const sessions = db.prepare(`
+            SELECT cs.*, u.full_name as user_name, u.username as user_username 
+            FROM chat_sessions cs 
+            LEFT JOIN users u ON cs.user_id = u.id 
+            ORDER BY cs.updated_at DESC
+        `).all();
+        res.json({ success: true, data: sessions });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.get('/api/chat/messages/:sessionId', authenticateToken, (req, res) => {
+    try {
+        const messages = db.prepare('SELECT * FROM chat_messages WHERE session_id=? ORDER BY created_at ASC').all(req.params.sessionId);
+        res.json({ success: true, data: messages });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.get('/api/chat/my-session', authenticateToken, (req, res) => {
+    const user_id = (req as any).user.id;
+    try {
+        const session = db.prepare("SELECT id FROM chat_sessions WHERE user_id=? AND status='open'").get(user_id) as any;
+        res.json({ success: true, data: session ? { session_id: session.id } : null });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.post('/api/chat/messages', authenticateToken, (req, res) => {
+    const { session_id, message, sender_role } = req.body;
+    const sender_id = (req as any).user.id;
+    let sid = session_id;
+    try {
+        if (!sid) {
+            // Nếu chưa có session (từ khách hàng), chỉ lấy session hiển có của user (status = 'open') hoặc tạo mới
+            const existing = db.prepare("SELECT id FROM chat_sessions WHERE user_id=? AND status='open'").get(sender_id) as any;
+            if (existing) {
+                sid = existing.id;
+            } else {
+                const result = db.prepare('INSERT INTO chat_sessions (user_id) VALUES (?)').run(sender_id);
+                sid = result.lastInsertRowid;
+            }
+        }
+        db.prepare('INSERT INTO chat_messages (session_id, sender_id, sender_role, message) VALUES (?, ?, ?, ?)').run(sid, sender_id, sender_role, message);
+        db.prepare('UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id=?').run(sid);
+        res.json({ success: true, data: { session_id: sid } });
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 });
 

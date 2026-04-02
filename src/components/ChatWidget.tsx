@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Headset } from 'lucide-react';
 
-interface Message {
-    id: string;
-    role: 'user' | 'bot';
-    text: string;
+interface ChatMessage {
+    id: number;
+    session_id: number;
+    sender_id: number;
+    sender_role: string;
+    message: string;
+    created_at: string;
 }
 
 interface ChatWidgetProps {
@@ -24,16 +27,51 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
         if (onCloseExternal) onCloseExternal();
     };
 
-    const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'bot', text: 'Chào bạn! Mình là AI chuyên gia sắc đẹp hệ Tycoon. Có thể hỗ trợ bạn chọn mỹ phẩm hay đặt lịch chăm sóc Spa không?' }
-    ]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [sessionId, setSessionId] = useState<number | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const token = localStorage.getItem('tycoon_token') || '';
+    const user = (() => { try { return JSON.parse(localStorage.getItem('tycoon_user')||'null'); } catch { return null; } })();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
+
+    const fetchMessages = (sid: number) => {
+        if (!token) return;
+        fetch(`/api/chat/messages/${sid}`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json()).then(d => {
+                if (d.success) {
+                    setMessages(d.data);
+                    scrollToBottom();
+                }
+            });
+    };
+
+    useEffect(() => {
+        if (!isOpen || !token) return;
+        
+        // Find if user has a session
+        if (!sessionId) {
+            fetch('/api/chat/my-session', { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json()).then(d => {
+                    if (d.success && d.data?.session_id) {
+                        setSessionId(d.data.session_id);
+                        fetchMessages(d.data.session_id);
+                    }
+                });
+        }
+    }, [isOpen, token, sessionId]);
+
+    useEffect(() => {
+        if (isOpen && sessionId && token) {
+            const interval = setInterval(() => fetchMessages(sessionId), 5000);
+            return () => clearInterval(interval);
+        }
+    }, [isOpen, sessionId, token]);
 
     useEffect(() => {
         scrollToBottom();
@@ -41,30 +79,30 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
 
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
+        if (!token) {
+            alert('Vui lòng đăng nhập để chat với nhân viên hỗ trợ.');
+            return;
+        }
 
         const userMsg = input.trim();
         setInput('');
-        const newMessages = [...messages, { id: Date.now().toString(), role: 'user' as const, text: userMsg }];
-        setMessages(newMessages);
         setIsLoading(true);
 
         try {
-            // Gửi kèm lịch sử hội thoại để AI nhớ ngữ cảnh (tối đa 10 tin nhắn gần nhất)
-            const history = newMessages.slice(-11, -1);
-            const res = await fetch('/api/ai/chat', {
+            const res = await fetch('/api/chat/messages', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMsg, history })
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ session_id: sessionId, message: userMsg, sender_role: user?.role || 'customer' })
             });
             const data = await res.json();
 
             if (data.success) {
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: data.data.response }]);
-            } else {
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: '❌ Hệ thống AI đang bận, vui lòng thử lại sau.' }]);
+                const sid = data.data.session_id;
+                if (!sessionId) setSessionId(sid);
+                fetchMessages(sid);
             }
-        } catch {
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: '❌ Lỗi kết nối đến máy chủ.' }]);
+        } catch (error) {
+            console.error(error);
         } finally {
             setIsLoading(false);
         }
@@ -72,14 +110,14 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
 
     return (
         <>
-            {/* Bot Icon */}
+            {/* Widget Icon */}
             {!isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-[#ff6b00] to-orange-400 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 transition-transform z-50 overflow-hidden"
+                    className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-[#005a31] to-emerald-600 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 transition-transform z-50 overflow-hidden"
                 >
                     <div className="absolute inset-0 bg-white opacity-20 animate-ping rounded-full"></div>
-                    <Bot size={28} />
+                    <Headset size={28} />
                 </button>
             )}
 
@@ -89,8 +127,8 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
                     {/* Header */}
                     <div className="bg-gradient-to-r from-[#005a31] to-emerald-700 px-4 py-3 flex items-center justify-between text-white">
                         <div className="flex items-center gap-2">
-                            <Bot size={22} />
-                            <span className="font-bold text-[15px]">Tycoon AI Assistant</span>
+                            <Headset size={22} />
+                            <span className="font-bold text-[15px]">Tư Vấn Hợp Tác & Hỗ Trợ</span>
                         </div>
                         <button onClick={handleClose} className="hover:bg-white/20 p-1 rounded-full transition-colors w-7 h-7 flex items-center justify-center">
                             <X size={18} />
@@ -99,15 +137,28 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
 
                     {/* Messages */}
                     <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50/50">
-                        {messages.map((msg) => (
-                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-[#005a31] text-white rounded-br-sm' : 'bg-white border text-gray-800 rounded-bl-sm'}`}>
-                                    {msg.text.split('\n').map((line, i) => (
-                                        <span key={i}>{line}{i < msg.text.split('\n').length - 1 && <br />}</span>
-                                    ))}
-                                </div>
+                        {messages.length === 0 && (
+                            <div className="text-center text-sm text-gray-500 py-4 opacity-70">
+                                Hãy để lại tin nhắn, nhân viên của Tycoon sẽ hỗ trợ bạn ngay lập tức!
                             </div>
-                        ))}
+                        )}
+                        {messages.map((msg) => {
+                            const isUser = msg.sender_role === 'customer';
+                            return (
+                                <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm flex flex-col ${isUser ? 'bg-[#005a31] text-white rounded-br-sm' : 'bg-white border text-gray-800 rounded-bl-sm'}`}>
+                                        <div className="flex flex-col">
+                                            {msg.message.split('\n').map((line, i) => (
+                                                <span key={i}>{line}{i < msg.message.split('\n').length - 1 && <br />}</span>
+                                            ))}
+                                        </div>
+                                        <span className={`text-[9px] text-right mt-1 opacity-70 ${isUser ? 'text-emerald-200' : 'text-gray-400'}`}>
+                                            {new Date(msg.created_at).toLocaleTimeString('vi-VN')}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
                         {isLoading && (
                             <div className="flex justify-start">
                                 <div className="bg-white border rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-1">
@@ -122,23 +173,29 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
 
                     {/* Input */}
                     <div className="p-3 bg-white border-t border-gray-100">
-                        <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1 pl-4">
-                            <input
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                placeholder="Hỏi Tycoon gì đó..."
-                                className="flex-grow bg-transparent text-[14px] focus:outline-none"
-                            />
-                            <button
-                                onClick={handleSend}
-                                disabled={!input.trim() || isLoading}
-                                className="w-8 h-8 rounded-full bg-[#005a31] text-white flex items-center justify-center hover:opacity-90 disabled:opacity-50 transition-opacity"
-                            >
-                                <Send size={14} className="ml-[-2px] mt-[1px]" />
-                            </button>
-                        </div>
+                        {!user ? (
+                            <div className="text-center text-xs text-red-500 font-bold p-2">
+                                Bạn cần đăng nhập để được hỗ trợ!
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1 pl-4">
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                                    placeholder="Lời nhắn..."
+                                    className="flex-grow bg-transparent text-[14px] focus:outline-none"
+                                />
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!input.trim() || isLoading}
+                                    className="w-8 h-8 rounded-full bg-[#005a31] text-white flex items-center justify-center hover:opacity-90 disabled:opacity-50 transition-opacity"
+                                >
+                                    <Send size={14} className="ml-[-2px] mt-[1px]" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, CalendarCheck, Users, Megaphone, Settings,
   LogOut, Bell, Search, Download, Plus, MoreHorizontal, Edit2, Trash2,
   X, Save, Tag, List, Building2, Image as ImageIcon, Clock, TrendingUp,
-  ShoppingBag, UserCheck, ChevronUp, ChevronDown, RefreshCw
+  ShoppingBag, UserCheck, ChevronUp, ChevronDown, RefreshCw, MessageSquare, Send
 } from 'lucide-react';
 
 /* ─── TYPES ─── */
@@ -13,19 +13,11 @@ interface Product {
   is_flash_deal: boolean; sold_count: number; brand_id?: number; brand_name?: string;
 }
 interface Brand { id: number; name: string; }
-interface Order { id: number; user_id: number; total_amount: number; final_amount: number; payment_method: string; created_at: string; product_names?: string; }
+interface Order { id: number; user_id: number; total_amount: number; final_amount: number; payment_method: string; order_status?: string; created_at: string; product_names?: string; }
 interface SpaBooking { id: number; user_id: number; service_name: string; branch_name: string; booking_time: string; status: string; }
 interface Customer { id: number; username: string; full_name: string; role: string; tier: string; points: number; }
-
-const NAV = [
-  { id: 'dashboard',  label: 'Tổng Quan',      Icon: LayoutDashboard },
-  { id: 'products',   label: 'Sản Phẩm',        Icon: Package },
-  { id: 'orders',     label: 'Đơn Hàng',        Icon: ShoppingBag },
-  { id: 'bookings',   label: 'Lịch Đặt Spa',    Icon: CalendarCheck },
-  { id: 'customers',  label: 'Khách Hàng',      Icon: Users },
-  { id: 'marketing',  label: 'Marketing',       Icon: Megaphone },
-  { id: 'settings',   label: 'Cài Đặt',         Icon: Settings },
-];
+interface ChatSession { id: number; user_id: number; user_name: string; user_username: string; status: string; updated_at: string; }
+interface ChatMessage { id: number; session_id: number; sender_id: number; sender_role: string; message: string; created_at: string; }
 
 const STATUS_CLS: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-700',
@@ -111,12 +103,20 @@ function ProductModal({ product, brands, onClose, onSave }: {
 
 /* ─── MAIN ─── */
 export default function AdminLayout() {
-  const [tab, setTab]             = useState('dashboard');
+  const user = (() => { try { return JSON.parse(localStorage.getItem('tycoon_user')||'null'); } catch { return null; } })();
+  const [tab, setTab]             = useState(user?.role === 'admin' ? 'dashboard' : 'products');
   const [products, setProducts]   = useState<Product[]>([]);
   const [brands, setBrands]       = useState<Brand[]>([]);
   const [orders, setOrders]       = useState<Order[]>([]);
   const [bookings, setBookings]   = useState<SpaBooking[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  
+  // Chat state
+  const [sessions, setSessions]   = useState<ChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<number|null>(null);
+  const [messages, setMessages]   = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+
   const [modal, setModal]         = useState(false);
   const [editP, setEditP]         = useState<Partial<Product>>({});
   const [loading, setLoading]     = useState(false);
@@ -124,9 +124,23 @@ export default function AdminLayout() {
   const [notif, setNotif]         = useState(false);
   const [stats, setStats]         = useState({ revenue: 0, orders: 0, customers: 0, products: 0 });
 
-  const user = (() => { try { return JSON.parse(localStorage.getItem('tycoon_user')||'null'); } catch { return null; } })();
   const token = localStorage.getItem('tycoon_token') || '';
   const authHead = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+  const NAV = user?.role === 'admin' ? [
+    { id: 'dashboard',  label: 'Tổng Quan',      Icon: LayoutDashboard },
+    { id: 'products',   label: 'Sản Phẩm',        Icon: Package },
+    { id: 'orders',     label: 'Đơn Hàng',        Icon: ShoppingBag },
+    { id: 'bookings',   label: 'Lịch Đặt Spa',    Icon: CalendarCheck },
+    { id: 'customers',  label: 'Khách Hàng',      Icon: Users },
+    { id: 'support',    label: 'Tư Vấn Hỗ Trợ',   Icon: MessageSquare },
+    { id: 'marketing',  label: 'Marketing',       Icon: Megaphone },
+    { id: 'settings',   label: 'Cài Đặt',         Icon: Settings },
+  ] : [
+    { id: 'products',   label: 'Sản Phẩm',        Icon: Package },
+    { id: 'orders',     label: 'Đơn Hàng',        Icon: ShoppingBag },
+    { id: 'support',    label: 'Tư Vấn Hỗ Trợ',   Icon: MessageSquare },
+  ];
 
   /* Fetch helpers */
   const fetchProducts = () => {
@@ -174,13 +188,46 @@ export default function AdminLayout() {
       .catch(()=>{});
   };
 
+  const fetchSessions = () => {
+    fetch('/api/chat/sessions', { headers: authHead })
+      .then(r=>r.json()).then(d=>{ if(d.success) setSessions(d.data); });
+  };
+
+  const fetchMessages = (sessionId: number) => {
+    fetch(`/api/chat/messages/${sessionId}`, { headers: authHead })
+      .then(r=>r.json()).then(d=>{ if(d.success) setMessages(d.data); });
+  };
+
   useEffect(()=>{ fetchStats(); fetchBrands(); }, []);
   useEffect(()=>{
     if(tab==='products') fetchProducts();
     if(tab==='orders')   fetchOrders();
     if(tab==='bookings') fetchBookings();
     if(tab==='customers') fetchCustomers();
+    if(tab==='support')  fetchSessions();
   }, [tab]);
+
+  useEffect(() => {
+    if (activeSession) {
+      fetchMessages(activeSession);
+      const interval = setInterval(() => fetchMessages(activeSession), 5000);
+      return () => clearInterval(interval);
+    }
+  }, [activeSession]);
+
+  const handleSendMessage = () => {
+    if (!chatInput.trim() || !activeSession) return;
+    fetch('/api/chat/messages', {
+      method: 'POST', headers: authHead,
+      body: JSON.stringify({ session_id: activeSession, message: chatInput, sender_role: 'staff' })
+    }).then(r=>r.json()).then(d=>{
+      if (d.success) {
+        setChatInput('');
+        fetchMessages(activeSession);
+        fetchSessions();
+      }
+    });
+  };
 
   const handleSave = (form: Partial<Product>) => {
     const method = form.id ? 'PUT' : 'POST';
@@ -196,12 +243,12 @@ export default function AdminLayout() {
   const handleLogout = () => { localStorage.removeItem('tycoon_token'); localStorage.removeItem('tycoon_user'); window.location.href='/'; };
 
   /* Access guard */
-  if(!user || user.role !== 'admin') return (
+  if(!user || (user.role !== 'admin' && user.role !== 'staff')) return (
     <div className="min-h-screen bg-[#f0faf4] flex items-center justify-center" style={{fontFamily:"'Inter','Segoe UI',sans-serif"}}>
       <div className="bg-white p-10 rounded-3xl shadow-xl text-center max-w-sm">
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><X size={28} className="text-red-500"/></div>
         <h2 className="text-xl font-black text-gray-800 mb-2">Truy Cập Bị Từ Chối</h2>
-        <p className="text-sm text-gray-500 mb-6">Bạn không có quyền quản trị viên. Vui lòng đăng nhập bằng tài khoản Admin.</p>
+        <p className="text-sm text-gray-500 mb-6">Bạn không có quyền truy cập trang này. Vui lòng đăng nhập bằng quyền Quản trị hoặc Nhân viên.</p>
         <button onClick={()=>window.location.href='/'} className="px-8 py-2.5 bg-[#2d6a4f] text-white font-bold rounded-full hover:bg-[#1b4332] transition text-sm">Về Trang Chủ</button>
       </div>
     </div>
@@ -228,7 +275,7 @@ export default function AdminLayout() {
         {/* Logo giống web chính */}
         <div className="px-5 py-4 border-b border-[#d1fae5] flex items-center gap-2">
           <img src="https://i.imgur.com/BI0tiZr.png" alt="Tycoon" className="h-8 w-auto object-contain"/>
-          <div className="text-[10px] font-bold text-[#6aab8a] uppercase tracking-wider leading-none mt-1">Admin</div>
+          <div className="text-[10px] font-bold text-[#6aab8a] uppercase tracking-wider leading-none mt-1">{user?.role === 'admin' ? 'Admin' : 'Nhân Viên'}</div>
         </div>
 
         <nav className="flex-1 py-4 px-3 space-y-0.5">
@@ -257,7 +304,7 @@ export default function AdminLayout() {
             </div>
             <div className="flex-1 overflow-hidden">
               <div className="text-xs font-bold text-[#1b4332] truncate">{user.full_name||user.username}</div>
-              <div className="text-[10px] text-[#6aab8a] font-semibold">Quản Trị Viên</div>
+              <div className="text-[10px] text-[#6aab8a] font-semibold">{user?.role === 'admin' ? 'Quản Trị Viên' : 'Nhân Viên'}</div>
             </div>
           </div>
           <button onClick={handleLogout} className="w-full flex items-center gap-2 text-xs text-[#6aab8a] hover:text-red-500 hover:bg-red-50 px-2 py-1.5 rounded-lg transition">
@@ -294,7 +341,7 @@ export default function AdminLayout() {
             <div className="flex items-center gap-2">
               <div className="text-right">
                 <div className="text-xs font-bold text-gray-800">{user.full_name||user.username}</div>
-                <div className="text-[10px] text-gray-400">Quản Trị Viên</div>
+                <div className="text-[10px] text-gray-400">{user?.role === 'admin' ? 'Quản Trị Viên' : 'Nhân Viên'}</div>
               </div>
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2d6a4f] to-[#40916c] text-white text-sm font-black flex items-center justify-center">
                 {user.full_name?.charAt(0)||'A'}
@@ -487,7 +534,20 @@ export default function AdminLayout() {
                             <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-bold rounded-full uppercase">{o.payment_method||'—'}</span>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">{o.created_at ? new Date(o.created_at).toLocaleDateString('vi-VN') : '—'}</td>
-                          <td className="px-6 py-4"><button className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><MoreHorizontal size={16}/></button></td>
+                          <td className="px-6 py-4">
+                            <select value={o.order_status || 'processing'} onChange={(e) => {
+                                fetch(`/api/admin/orders/${o.id}/status`, {
+                                    method: 'PUT', headers: authHead,
+                                    body: JSON.stringify({ order_status: e.target.value })
+                                }).then(r=>r.json()).then(d=>{ if(d.success) fetchOrders(); });
+                            }} className="bg-gray-50 border border-gray-200 text-[11px] font-bold text-gray-700 rounded-lg px-2 py-1.5 outline-none cursor-pointer">
+                                <option value="pending">Chờ xác nhận</option>
+                                <option value="processing">Đang xử lý</option>
+                                <option value="shipped">Đang giao hàng</option>
+                                <option value="completed">Hoàn thành</option>
+                                <option value="cancelled">Đã hủy</option>
+                            </select>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -629,6 +689,80 @@ export default function AdminLayout() {
                 ))}
                 <button className="px-6 py-2.5 bg-[#1b4332] text-white text-sm font-bold rounded-xl hover:bg-[#163828] transition shadow">Lưu Thay Đổi</button>
               </div>
+            </div>
+          )}
+
+          {/* ══ TƯ VẤN HỖ TRỢ / CHAT ══ */}
+          {tab==='support' && (
+            <div className="flex bg-white h-[calc(100vh-140px)] rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+               {/* Sessions list */}
+               <div className="w-1/3 border-r border-gray-100 bg-gray-50 flex flex-col">
+                 <div className="p-4 border-b border-gray-100 bg-white">
+                   <h2 className="font-bold text-gray-800">Khách Hàng Cần Hỗ Trợ</h2>
+                   <p className="text-[11px] text-gray-400">{sessions.length} phiên chat</p>
+                 </div>
+                 <div className="flex-1 overflow-y-auto min-h-0">
+                   {sessions.map(s => (
+                     <div key={s.id} onClick={() => setActiveSession(s.id)}
+                       className={`p-4 border-b border-gray-100 cursor-pointer transition-colors ${activeSession === s.id ? 'bg-emerald-50' : 'hover:bg-gray-100 bg-white'}`}>
+                       <div className="flex justify-between items-start mb-1">
+                         <span className="font-bold text-sm text-gray-800">{s.user_name || s.user_username}</span>
+                         <span className="text-[10px] text-gray-400">{new Date(s.updated_at).toLocaleTimeString('vi-VN')}</span>
+                       </div>
+                       <p className="text-xs text-gray-500 truncate">Khách hàng yêu cầu tư vấn (# {s.user_id})</p>
+                     </div>
+                   ))}
+                   {sessions.length === 0 && <p className="p-5 text-center text-xs text-gray-400">Không có đoạn chat nào.</p>}
+                 </div>
+               </div>
+               
+               {/* Chat area */}
+               <div className="w-2/3 flex flex-col bg-white">
+                 {activeSession ? (
+                   <>
+                     <div className="p-4 border-b border-gray-100 shadow-sm flex items-center justify-between bg-white z-10">
+                       <div>
+                         <h3 className="font-bold text-gray-800">Phiên Chat #{activeSession}</h3>
+                         <p className="text-xs text-emerald-600 font-medium">Đang hoạt động</p>
+                       </div>
+                       <button className="text-xs text-gray-500 hover:text-red-500 transition px-3 py-1.5 rounded-lg border border-gray-200">Đóng phiên</button>
+                     </div>
+                     
+                     <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50">
+                       {messages.map((m, i) => {
+                         const isStaff = m.sender_role === 'staff' || m.sender_role === 'admin';
+                         return (
+                           <div key={i} className={`flex ${isStaff ? 'justify-end' : 'justify-start'}`}>
+                             <div className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm ${isStaff ? 'bg-[#2d6a4f] text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'}`}>
+                               <p>{m.message}</p>
+                               <span className={`block text-[9px] mt-1 text-right ${isStaff ? 'text-emerald-200' : 'text-gray-400'}`}>
+                                 {new Date(m.created_at).toLocaleTimeString('vi-VN')}
+                               </span>
+                             </div>
+                           </div>
+                         );
+                       })}
+                       {messages.length===0 && <p className="text-center text-xs text-gray-400 py-10">Khách hàng chưa gửi tin nhắn.</p>}
+                     </div>
+                     
+                     <div className="p-4 border-t border-gray-100 bg-white">
+                       <div className="flex items-center gap-2">
+                         <input value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleSendMessage();}}
+                           className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#2d6a4f] transition"
+                           placeholder="Nhập tin nhắn hỗ trợ..." />
+                         <button onClick={handleSendMessage} className="bg-[#2d6a4f] hover:bg-[#1b4332] text-white p-3 rounded-xl transition shadow-md">
+                           <Send size={18}/>
+                         </button>
+                       </div>
+                     </div>
+                   </>
+                 ) : (
+                   <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                     <MessageSquare size={48} className="mb-4 opacity-20"/>
+                     <p>Chọn một cuộc trò chuyện để bắt đầu hỗ trợ</p>
+                   </div>
+                 )}
+               </div>
             </div>
           )}
 
