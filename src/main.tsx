@@ -48,7 +48,7 @@ class ErrorBoundary extends React.Component<{children: any}, {hasError: boolean,
 }
 
 const path = window.location.pathname;
-const MainComponent = path.startsWith('/admin') ? <AdminLayout /> : <App />;
+const MainComponent = path.startsWith('/admin') ? <AdminLayout onBack={() => window.location.href = '/'} /> : <App />;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

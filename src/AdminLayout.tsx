@@ -102,7 +102,7 @@ function ProductModal({ product, brands, onClose, onSave }: {
 }
 
 /* ─── MAIN ─── */
-export default function AdminLayout() {
+export default function AdminLayout({ onBack }: { onBack: () => void }) {
   const user = (() => { try { return JSON.parse(localStorage.getItem('tycoon_user')||'null'); } catch { return null; } })();
   const [tab, setTab]             = useState(user?.role === 'admin' ? 'dashboard' : 'products');
   const [products, setProducts]   = useState<Product[]>([]);
@@ -292,7 +292,7 @@ export default function AdminLayout() {
         </nav>
 
         <div className="px-3 pb-4">
-          <button onClick={()=>window.location.href='/'} className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1b4332] hover:bg-[#163828] text-white rounded-xl text-xs font-bold transition mb-3">
+          <button onClick={onBack} className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1b4332] hover:bg-[#163828] text-white rounded-xl text-xs font-bold transition mb-3">
             ← Về Trang Chủ
           </button>
         </div>

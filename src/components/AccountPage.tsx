@@ -5,10 +5,17 @@ interface AccountPageProps {
   user: any;
   onLogout: () => void;
   onUpdateUserCallback?: (updatedUser: any) => void;
+  initialTab?: string;
 }
 
-export default function AccountPage({ user, onLogout, onUpdateUserCallback }: AccountPageProps) {
-  const [activeTab, setActiveTab] = useState('profile');
+export default function AccountPage({ user, onLogout, onUpdateUserCallback, initialTab }: AccountPageProps) {
+  const [activeTab, setActiveTab] = useState(initialTab || 'profile');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
@@ -99,9 +106,10 @@ export default function AccountPage({ user, onLogout, onUpdateUserCallback }: Ac
     return <div className="min-h-[500px] flex items-center justify-center"><p>Vui lòng đăng nhập.</p></div>;
   }
 
-  const isEmail = user.username.includes('@');
-  const displayEmail = isEmail ? user.username : 'Chưa cập nhật';
-  const displayPhone = !isEmail ? user.username : (user.phone || 'Chưa cập nhật');
+  const username = user?.username || '';
+  const isEmail = username.includes('@');
+  const displayEmail = isEmail ? username : 'Chưa cập nhật';
+  const displayPhone = !isEmail ? username : (user?.phone || 'Chưa cập nhật');
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();

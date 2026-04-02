@@ -431,9 +431,9 @@ export default function ProductDetailPage({ product, onAddToCart, onBuyNow, onBa
         <div className="grid grid-cols-12 gap-5 mt-6">
             
             {/* Nội dung chi tiết - 9 cột */}
-             <div className="col-span-9 bg-white rounded-[2rem] shadow-soft border border-gray-100 overflow-hidden">
+             <div className="col-span-9 bg-white rounded-[2rem] shadow-soft border border-gray-100 flex flex-col">
                 {/* Sticky Header Nav */}
-                <div className="flex border-b border-gray-200 sticky top-[120px] bg-white z-30">
+                <div className="flex border-b border-gray-200 sticky top-[120px] bg-white z-[32] rounded-t-[2rem] overflow-hidden">
                     {[
                         { id: 'desc', label: 'Mô tả' },
                         { id: 'specs', label: 'Thông số' },
@@ -454,7 +454,7 @@ export default function ProductDetailPage({ product, onAddToCart, onBuyNow, onBa
                     ))}
                 </div>
 
-                <div className="p-6 min-h-[500px]">
+                <div className="p-8 min-h-[500px] relative z-20 bg-white">
                     {activeTab === 'desc' && (
                         <div className="text-[14px] text-gray-800 leading-relaxed font-normal">
                              <h4 className="font-bold mb-2 text-[15px]">{product.name}</h4>

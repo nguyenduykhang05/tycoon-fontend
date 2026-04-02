@@ -23,7 +23,8 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
         if (isOpenExternally) setIsOpen(true);
     }, [isOpenExternally]);
 
-    const handleClose = () => {
+    const handleClose = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         setIsOpen(false);
         if (onCloseExternal) onCloseExternal();
     };
@@ -137,7 +138,7 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
                     >
                         {/* Header */}
                         <div className="bg-gradient-to-r from-[#005a31] via-[#00703c] to-emerald-800 px-6 py-5 flex items-center justify-between text-white shadow-md relative">
-                            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5"></div>
+                            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5 pointer-events-none"></div>
                             <div className="flex items-center gap-4 relative z-10">
                                 <div className="p-2.5 bg-white/10 rounded-2xl border border-white/20">
                                     <Headset size={24} />
@@ -150,8 +151,13 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
                                     </span>
                                 </div>
                             </div>
-                            <button onClick={handleClose} className="hover:bg-white/20 p-2 rounded-full transition-all active:scale-90">
-                                <X size={20} />
+                            <button 
+                                type="button"
+                                onClick={(e) => handleClose(e)} 
+                                className="relative z-20 hover:bg-white/20 p-3 rounded-full transition-all active:scale-90 flex items-center justify-center min-w-[40px] min-h-[40px]"
+                                aria-label="Đóng chat"
+                            >
+                                <X size={22} />
                             </button>
                         </div>
 

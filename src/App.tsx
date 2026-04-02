@@ -20,7 +20,7 @@ import ChatWidget from './components/ChatWidget';
 import AIChatWidget from './components/AIChatWidget';
 import ProductDetailPage from './components/ProductDetailPage';
 import AccountPage from './components/AccountPage';
-import AdminDashboard from './components/AdminDashboard';
+// AdminLayout and AdminDashboard are now handled by main.tsx and /admin route
 
 
 interface Product {
@@ -191,6 +191,7 @@ export default function App() {
   const [hoveredCategory, setHoveredCategory] = useState<string>('Chăm Sóc Da Mặt');
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<'home' | 'cart' | 'store' | 'warranty' | 'spa' | 'product-detail' | 'account' | 'search-results' | 'blog-detail'>('home');
+  const [accountInitialTab, setAccountInitialTab] = useState<string>('profile');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
   const [flashDeals, setFlashDeals] = useState<Product[]>([]);
@@ -788,10 +789,10 @@ export default function App() {
                         </h4>
 
                         <div className="flex flex-col items-start gap-4 mb-4 py-2 text-[14px] text-gray-700 font-medium">
-                          <button onClick={() => { setCurrentPage('account'); setIsAccountMenuOpen(false); }} className="flex gap-2 items-center hover:text-[#005a31]"><FileText size={18} /> Tài khoản của bạn</button>
-                          <button className="flex gap-2 items-center hover:text-[#005a31]"><ShoppingCart size={18} /> Quản lý đơn hàng</button>
-                          <button className="flex gap-2 items-center hover:text-[#005a31]"><Heart size={18} /> Sản phẩm yêu thích</button>
-                          <button className="flex gap-2 items-center hover:text-[#005a31]"><MapPin size={18} /> Địa chỉ giao hàng</button>
+                          <button onClick={() => { setCurrentPage('account'); setAccountInitialTab('profile'); setIsAccountMenuOpen(false); }} className="flex gap-2 items-center hover:text-[#005a31]"><FileText size={18} /> Tài khoản của bạn</button>
+                          <button onClick={() => { setCurrentPage('account'); setAccountInitialTab('orders'); setIsAccountMenuOpen(false); }} className="flex gap-2 items-center hover:text-[#005a31]"><ShoppingCart size={18} /> Quản lý đơn hàng</button>
+                          <button onClick={() => { setCurrentPage('account'); setAccountInitialTab('wishlist'); setIsAccountMenuOpen(false); }} className="flex gap-2 items-center hover:text-[#005a31]"><Heart size={18} /> Sản phẩm yêu thích</button>
+                          <button onClick={() => { setCurrentPage('account'); setAccountInitialTab('address'); setIsAccountMenuOpen(false); }} className="flex gap-2 items-center hover:text-[#005a31]"><MapPin size={18} /> Địa chỉ giao hàng</button>
                         </div>
 
                         {user.role === 'staff' && (
@@ -1402,13 +1403,11 @@ export default function App() {
             )}
           </div>
         ) : currentPage === 'account' ? (
-          <AccountPage user={user} onLogout={() => { handleLogout(); setCurrentPage('home') }} onUpdateUserCallback={(updated) => setUser(updated)} />
+          <AccountPage user={user} onLogout={() => { handleLogout(); setCurrentPage('home') }} onUpdateUserCallback={(updated) => setUser(updated)} initialTab={accountInitialTab} />
         ) : currentPage === 'cart' ? (
           <CartPage onContinueShopping={() => setCurrentPage('home')} cartItems={cartItems} setCartItems={setCartItems} user={user} />
         ) : currentPage === 'store' ? (
           <StorePage initialProvince={selectedLocation} onNavigate={setCurrentPage} />
-        ) : currentPage === ('admin' as any) ? (
-          <AdminDashboard onBack={() => setCurrentPage('home')} />
         ) : currentPage === 'spa' ? (
           <SpaPage user={user} />
         ) : currentPage === 'blog-detail' && selectedBlog ? (
