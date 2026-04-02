@@ -44,24 +44,27 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
 
         const userMsg = input.trim();
         setInput('');
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text: userMsg }]);
+        const newMessages = [...messages, { id: Date.now().toString(), role: 'user' as const, text: userMsg }];
+        setMessages(newMessages);
         setIsLoading(true);
 
         try {
+            // Gửi kèm lịch sử hội thoại để AI nhớ ngữ cảnh (tối đa 10 tin nhắn gần nhất)
+            const history = newMessages.slice(-11, -1);
             const res = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMsg })
+                body: JSON.stringify({ message: userMsg, history })
             });
             const data = await res.json();
 
             if (data.success) {
                 setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: data.data.response }]);
             } else {
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: 'Hệ thống AI đang bận, vui lòng thử lại sau.' }]);
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: '❌ Hệ thống AI đang bận, vui lòng thử lại sau.' }]);
             }
-        } catch (error) {
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: 'Lỗi kết nối đến máy chủ.' }]);
+        } catch {
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', text: '❌ Lỗi kết nối đến máy chủ.' }]);
         } finally {
             setIsLoading(false);
         }
@@ -99,7 +102,9 @@ export default function ChatWidget({ isOpenExternally, onCloseExternal }: ChatWi
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-[#005a31] text-white rounded-br-sm' : 'bg-white border text-gray-800 rounded-bl-sm'}`}>
-                                    {msg.text}
+                                    {msg.text.split('\n').map((line, i) => (
+                                        <span key={i}>{line}{i < msg.text.split('\n').length - 1 && <br />}</span>
+                                    ))}
                                 </div>
                             </div>
                         ))}

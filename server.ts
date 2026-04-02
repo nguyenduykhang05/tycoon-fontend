@@ -414,20 +414,100 @@ app.delete('/api/admin/products/:id', authenticateToken, isAdmin, (req, res) => 
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-// AI Chat
+// AI Chat - Tycoon Smart Assistant
 app.post('/api/ai/chat', async (req, res) => {
-    const { message } = req.body;
+    const { message, history } = req.body;
     if (!message) return res.status(400).json({ success: false, message: 'Message is required' });
     try {
         if (!process.env.GEMINI_API_KEY) {
-            return res.json({ success: true, data: { response: "Đây là phản hồi mẫu vì chưa cấu hình GEMINI_API_KEY." } });
+            return res.json({ success: true, data: { response: "Chưa cấu hình GEMINI_API_KEY. Vui lòng thêm key vào file .env" } });
         }
+
+        // Lấy dữ liệu thật từ DB để AI có context
+        const products = db.prepare(`
+            SELECT p.name, p.price, p.original_price, p.discount_percent, p.category_name,
+                   p.is_flash_deal, p.sold_count, b.name as brand_name
+            FROM products p LEFT JOIN brands b ON p.brand_id = b.id
+            ORDER BY p.sold_count DESC LIMIT 30
+        `).all() as any[];
+
+        const spaServices = db.prepare(`
+            SELECT name, category, price, duration_minutes, description FROM spa_services
+        `).all() as any[];
+
+        const stores = db.prepare(`
+            SELECT name, address, province, district, type FROM stores LIMIT 10
+        `).all() as any[];
+
+        const flashDeals = products.filter((p: any) => p.is_flash_deal);
+        const topSelling = products.slice(0, 5);
+
+        const productList = products.map((p: any) =>
+            `- ${p.name} (${p.brand_name || 'N/A'}): ${p.price.toLocaleString('vi-VN')}₫ | Danh mục: ${p.category_name} | Đã bán: ${p.sold_count}`
+        ).join('\n');
+
+        const spaList = spaServices.map((s: any) =>
+            `- ${s.name} (${s.category}): ${s.price.toLocaleString('vi-VN')}₫ | Thời gian: ${s.duration_minutes} phút`
+        ).join('\n');
+
+        const storeList = stores.map((s: any) =>
+            `- ${s.name}: ${s.address}, ${s.province} (${s.type})`
+        ).join('\n');
+
+        const systemPrompt = `Bạn là "Tycoon AI Assistant" - trợ lý thông minh chuyên về mỹ phẩm và làm đẹp của hệ thống Tycoon Beauty & Clinic.
+
+## VỀ TYCOON
+- Tycoon là hệ thống mỹ phẩm & spa cao cấp tại Việt Nam với 100+ chi nhánh
+- Chuyên về: Chăm sóc da mặt, Trang điểm, Chăm sóc tóc, Nước hoa, Spa & Clinic
+- Website: tycoon.vn | Giao hàng miễn phí 2H cho đơn từ 90K
+
+## SẢN PHẨM HIỆN CÓ (${products.length} sản phẩm)
+${productList}
+
+## FLASH DEAL ĐANG DIỄN RA
+${flashDeals.map((p: any) => `- ${p.name}: ${p.price.toLocaleString('vi-VN')}₫ (Giảm ${p.discount_percent}%)`).join('\n') || 'Không có flash deal hiện tại'}
+
+## TOP BÁN CHẠY
+${topSelling.map((p: any) => `- ${p.name}: ${p.sold_count} đã bán`).join('\n')}
+
+## DỊCH VỤ SPA & CLINIC
+${spaList || 'Đang cập nhật dịch vụ'}
+
+## CHI NHÁNH
+${storeList || 'Đang cập nhật chi nhánh'}
+
+## HƯỚNG DẪN TRẢ LỜI
+1. Luôn trả lời bằng tiếng Việt, thân thiện, chuyên nghiệp
+2. Khi khách hỏi sản phẩm → gợi ý cụ thể với tên, giá, thương hiệu từ danh sách trên
+3. Khi khách hỏi giá → cung cấp giá chính xác từ dữ liệu
+4. Khi khách hỏi spa → tư vấn dịch vụ phù hợp và hướng dẫn đặt lịch
+5. Khi khách hỏi chi nhánh → cung cấp địa chỉ gần nhất
+6. Khi hỏi về đơn hàng → hướng dẫn vào mục "Tài khoản > Quản lý đơn hàng"
+7. Giới hạn câu trả lời dưới 200 từ, súc tích và hữu ích
+8. Với câu hỏi không liên quan đến mỹ phẩm/làm đẹp → nhẹ nhàng hướng về chủ đề Tycoon`;
+
+        // Build conversation history for multi-turn chat
+        const conversationHistory = (history || []).map((msg: any) => ({
+            role: msg.role === 'bot' ? 'model' : 'user',
+            parts: [{ text: msg.text }]
+        }));
+
+        const contents = [
+            { role: 'user', parts: [{ text: systemPrompt + '\n\n---\nKhách hàng hỏi: ' + message }] }
+        ];
+
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Bạn là trợ lý AI chuyên gia làm đẹp của Tycoon. Khách: ${message}`,
+            model: 'gemini-2.0-flash',
+            contents: conversationHistory.length > 0
+                ? [...conversationHistory, { role: 'user', parts: [{ text: message }] }]
+                : contents,
         });
+
         res.json({ success: true, data: { response: response.text } });
-    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+    } catch (e: any) {
+        console.error('AI Chat Error:', e.message);
+        res.status(500).json({ success: false, message: e.message });
+    }
 });
 
 // Admin: Tất cả đơn hàng
