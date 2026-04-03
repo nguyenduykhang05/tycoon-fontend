@@ -633,6 +633,22 @@ app.get('/api/admin/settings/flash-deal', (_req, res) => {
     res.json({ success: true, data: { end_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() } });
 });
 
+// Timesheets (Staff)
+app.get('/api/timesheets/status', authenticateToken, isStaffOrAdmin, (req: any, res) => {
+    try {
+        const lastAction = db.prepare('SELECT action FROM timesheets WHERE user_id=? ORDER BY timestamp DESC LIMIT 1').get(req.user.id);
+        res.json({ success: true, lastAction: lastAction ? lastAction.action : 'out' });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.post('/api/timesheets', authenticateToken, isStaffOrAdmin, (req: any, res) => {
+    const { action } = req.body;
+    try {
+        db.prepare('INSERT INTO timesheets (user_id, action) VALUES (?, ?)').run(req.user.id, action);
+        res.json({ success: true, message: `Chấm công ${action === 'in' ? 'vào' : 'ra'} thành công!` });
+    } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend API Server is running on http://0.0.0.0:${PORT}`);
     console.log(`Có thể truy cập qua IP mạng bộ (VD: http://192.168.x.x:${PORT})`);

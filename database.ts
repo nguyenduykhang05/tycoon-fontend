@@ -186,6 +186,13 @@ export function setupDatabase() {
       message TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS timesheets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      action TEXT CHECK(action IN ('in', 'out')),
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 }
 

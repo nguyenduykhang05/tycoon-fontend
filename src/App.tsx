@@ -242,6 +242,7 @@ export default function App() {
   const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
   const [selectedBlogCategory, setSelectedBlogCategory] = useState<string>('Tất cả');
   const [stores, setStores] = useState<any[]>([]);
+  const [timesheetStatus, setTimesheetStatus] = useState<'in' | 'out'>('out');
 
   const provinces = [
     'Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ', 
@@ -432,6 +433,9 @@ export default function App() {
           setLoginUsername('');
           setLoginPassword('');
           setLoginError('');
+          if (data.data.role === 'admin' || data.data.role === 'staff') {
+            window.location.href = '/admin';
+          }
         } else {
           setLoginError(data.message || 'Đăng nhập không thành công');
         }
@@ -493,14 +497,28 @@ export default function App() {
 
   const checkInStaff = () => {
     if (!user || user.role !== 'staff') return;
+    const nextAction = timesheetStatus === 'in' ? 'out' : 'in';
     fetch('/api/timesheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user.id, action: 'in' })
+      body: JSON.stringify({ action: nextAction })
     }).then(res => res.json()).then(data => {
-      if (data.success) alert('Chấm công check-in thành công!');
+      if (data.success) {
+        setTimesheetStatus(nextAction);
+        alert(data.message);
+      }
     });
   };
+
+  useEffect(() => {
+    if (user && user.role === 'staff') {
+      fetch('/api/timesheets/status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setTimesheetStatus(data.lastAction);
+        });
+    }
+  }, [user]);
 
   useEffect(() => {
 
@@ -796,8 +814,8 @@ export default function App() {
                         </div>
 
                         {user.role === 'staff' && (
-                          <button onClick={checkInStaff} className="w-full bg-emerald-100 text-[#005a31] py-2 mb-3 rounded font-bold border border-emerald-200 hover:bg-emerald-200 transition-colors flex items-center justify-center gap-2">
-                            <CheckCircle2 size={16} /> Chấm Công
+                          <button onClick={checkInStaff} className={`w-full ${timesheetStatus === 'in' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-emerald-100 text-[#005a31] border-emerald-200 hover:bg-emerald-200'} py-2 mb-3 rounded font-bold border transition-colors flex items-center justify-center gap-2`}>
+                            <CheckCircle2 size={16} /> {timesheetStatus === 'in' ? 'Chấm Công Ra (Check-out)' : 'Chấm Công Vào (Check-in)'}
                           </button>
                         )}
 

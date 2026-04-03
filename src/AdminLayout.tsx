@@ -204,7 +204,11 @@ export default function AdminLayout({ onBack }: { onBack: () => void }) {
     if(tab==='orders')   fetchOrders();
     if(tab==='bookings') fetchBookings();
     if(tab==='customers') fetchCustomers();
-    if(tab==='support')  fetchSessions();
+    if(tab==='support') {
+      fetchSessions();
+      const interval = setInterval(() => fetchSessions(), 5000);
+      return () => clearInterval(interval);
+    }
   }, [tab]);
 
   useEffect(() => {
